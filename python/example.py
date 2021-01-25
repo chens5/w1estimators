@@ -3,7 +3,6 @@ import gudhi.wasserstein.barycenter
 import gudhi.wasserstein
 import csv
 import numpy as np
-import matplotlib.pyplot as plt
 import pd_estimators as pde
 import os
 import time
@@ -12,7 +11,10 @@ import sys
 import faulthandler
 import math
 
-# process p diagrams into numpy arrays
+# Converts a csv file to a list of points
+# Also returns the representation of the diagram required to calculate
+# flowtree/embedding distance (i.e. [(a1, 1.0),... ]) where a1 is the index of
+# the point in the total list of points.
 def csv_to_diagram(file, dict, unique_points):
     p_list = []
     ft_diagram = []
@@ -51,39 +53,46 @@ def load_data(folder):
 
 
 def main():
-    if len(sys.argv) < 3:
-        sys.exit("Need data folder and input file to write results")
-    file = sys.argv[2]
+    if len(sys.argv) < 2:
+        sys.exit("Need data folder")
     folder = sys.argv[1]
     data = load_data(folder)
     flowtree_vocabulary = data[0].astype(np.float32)
-    all_diagrams = data[1]
+    diagrams = data[1]
     flowtree_diagrams = data[2]
 
-    num_diagrams = len(all_diagrams)
-    results = []
+    num_diagrams = len(diagrams)
+
     queries = random.sample(range(200), 100)
     candidates = [i for i in range(num_diagrams) if i not in queries]
 
+    solver = pde.PDEstimators()
+    start = time.time()
+    solver.load_points(flowtree_vocabulary)
+    end = time.time()
+    print("Points in flowtree: ", len(flowtree_vocabulary))
+    print("Time for building the flowtree: ", end - start)
+    start = time.time()
+    solver.load_diagrams(flowtree_diagrams)
+    end = time.time()
+    print("Time for loading all embedding representations: ", end - start)
 
-    #solver.quadtree_query_pair(103, 11)
-    with open(file, mode='w') as csv_file:
-        fieldnames = ['query', 'candidate', 'max_diagram_size', "hera_time", "ft_time", "qt_time", "hera_res", "ft_res", "qt_res"]
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        for trial in range(5):
-            solver = pde.PDEstimators()
-            start = time.time()
-            solver.load_vocabulary(flowtree_vocabulary)
-            end = time.time()
-            print("Points in flowtree: ", len(flowtree_vocabulary))
-            print("Time for building the flowtree: ", end - start)
+    ft_results = []
+    emb_results = []
+    hera_results = []
+    for i in queries:
+        for j in candidates:
+            hera_results.append(gudhi.hera.wasserstein_distance(diagrams[i], diagrams[j], order =1, internal_p=2))
+            ft_results.append(solver.flowtree_distance(flowtree_diagrams[i], flowtree_diagrams[j], 2))
+            emb_results.append(solver.embedding_distance(i, j))
+
+    ft_results = np.array(ft_results)
+    emb_results = np.array(emb_results)
+    hera_results = np.array(hera_results)
+    print('Average flowtree error:', np.average(abs(ft_results - hera_results)/hera_results))
+    print('Average embedding error:', np.average(abs(emb_results - hera_results)/hera_results))
 
 
-            start = time.time()
-            solver.load_diagrams(flowtree_diagrams)
-            end = time.time()
-            print("Time for computing all embeddings: ", end - start)
 
 
 
