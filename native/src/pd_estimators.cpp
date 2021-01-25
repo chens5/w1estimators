@@ -44,7 +44,7 @@ class PDEstimators {
   PDEstimators() : stage(0) {}
 
 
-  void load_vocabulary_pd(NumPyFloatArray points) {
+  void load_vocabulary(NumPyFloatArray points) {
     if (stage != 0) {
       throw std::logic_error(
           "load_vocabulary() should be called once in the beginning");
@@ -103,7 +103,7 @@ class PDEstimators {
     node_id.resize(parents.size());
   }
 
-  void load_candidates(const std::vector<std::vector<std::pair<int32_t, float>>> &dataset) {
+  void load_diagrams(const std::vector<std::vector<std::pair<int32_t, float>>> &dataset) {
     for (auto &measure : dataset) {
       dataset_embedding.push_back(compute_embedding(measure));
     }
@@ -157,15 +157,7 @@ public:
     auto point_embedding = dataset_embedding[b];
     std::vector<std::pair<int32_t, float>> q_save;
     std::vector<std::pair<int32_t, float>> p_save;
-    // print embedding
-    // std::cout << "--------- QUERY EMBEDDING ------ \n";
-    // for (auto x : query_embedding) {
-    //   std::cout << "CELL: " << x.first << " VALUE: "<< x.second << "\n";
-    // }
-    // std::cout << "--------- POINT EMBEDDING ------ \n";
-    // for (auto x : point_embedding) {
-    //   std::cout << "CELL: " << x.first << " VALUE: "<< x.second << "\n";
-    // }
+
     float score = 0.0;
     size_t qp = 0;
     size_t dp = 0;
@@ -182,32 +174,18 @@ public:
     }
   }
   for(std::vector<std::pair<int32_t, float>>::reverse_iterator it = point_embedding.rbegin();
-it != point_embedding.rend(); ++it) {
-  if ((*it).first >= parent_size) {
-    score += point_embedding.back().second;
-    point_embedding.pop_back();
-    p_save.push_back((*it));
+  it != point_embedding.rend(); ++it) {
+    if ((*it).first >= parent_size) {
+      score += point_embedding.back().second;
+      point_embedding.pop_back();
+      p_save.push_back((*it));
+    }
+    if((*it).first < parent_size) {
+      break;
+    }
   }
-  if((*it).first < parent_size) {
-    break;
-  }
-}
-  // std::cout << "--------- QUERY EMBEDDING ------ \n";
-  // for (auto x : query_embedding) {
-  //   std::cout << "CELL: " << x.first << " VALUE: "<< x.second << "\n";
-  // }
-  // std::cout << "--------- POINT EMBEDDING ------ \n";
-  // for (auto x : point_embedding) {
-  //   std::cout << "CELL: " << x.first << " VALUE: "<< x.second << "\n";
-  // }
-  // std::cout<< "score so far "<< score << '\n';
-  // std::cout<< "query embedding size: "<< query_embedding.size() << '\n';
-  // std::cout<< "point embedding size: "<< query_embedding.size() << '\n';
-
-    //std::cout<< "parent size: " << parent_size << '\n';
     while( qp < query_embedding.size() || dp < point_embedding.size()){
       if (qp == query_embedding.size()) {
-        //std::cout << parents[point_embedding[dp].first].second <<'\n';
         if(!parents[ point_embedding[dp].first].second) {
           score += point_embedding[dp].second;
         }
@@ -237,19 +215,16 @@ it != point_embedding.rend(); ++it) {
         ++dp;
       }
 
-      // std::cout << "score: "<< score <<'\n';
-      // std::cout<<'\n';
-
     }
     for(std::vector<std::pair<int32_t, float>>::reverse_iterator it = q_save.rbegin();
-  it != q_save.rend(); ++it) {
-    query_embedding.push_back((*it));
-  }
-  for(std::vector<std::pair<int32_t, float>>::reverse_iterator it = p_save.rbegin();
-it != p_save.rend(); ++it) {
-  point_embedding.push_back((*it));
-}
-    return delta0 * score;
+      it != q_save.rend(); ++it) {
+        query_embedding.push_back((*it));
+      }
+      for(std::vector<std::pair<int32_t, float>>::reverse_iterator it = p_save.rbegin();
+    it != p_save.rend(); ++it) {
+      point_embedding.push_back((*it));
+    }
+        return delta0 * score;
 
   }
 
@@ -342,7 +317,7 @@ it != p_save.rend(); ++it) {
 
   }
 
-  float flowtree_query_pd(const std::vector<std::pair<int32_t, float>> &a,
+  float flowtree_query(const std::vector<std::pair<int32_t, float>> &a,
                           const std::vector<std::pair<int32_t, float>> &b,
                           const int32_t internal_norm){
 
@@ -456,10 +431,14 @@ it != p_save.rend(); ++it) {
         proj.resize(2);
         proj[0] = (point[0] + point[1]) / 2;
         proj[1] = proj[0];
-        float dist = (point - proj).norm();
-        // std::cout << "matched: ";
-        // std::cout << x.second << " with the diagonal \n";
-        // std::cout << "distance to the diagonal is: " << dist << '\n';
+        float dist = 0;
+        if (internal_norm == 2) {
+          dist = (point - proj).norm();
+        } else if (internal_norm == 1) {
+          dist = fabs(point[0] - proj[0]) + fabs(point[1] - proj[1]);
+        } else {
+          dist = std::max(fabs(point[0] - proj[0]), fabs(point[1] - proj[1]));
+        }
         res += dist * fabs(x.first);
       }
       if (unassigned > EPS2) {
@@ -472,24 +451,13 @@ it != p_save.rend(); ++it) {
 
   float run_query_pd(int32_t depth, int32_t nd, int32_t internal_norm) {
     float res = 0.0;
-    // First run_query call -> res = run_query(0, node_id[0])
-    // REMEMBER: node_id[0] gives us an id for that node that we can then use
-    // to get its subtree
-    // For the nodes in node_id[0]'s subtree, we're going to get all the nodes
-    // directly below it
-    // Eventually, we will hit the level right before the leaves - this is our base case
     for (auto x : subtree[nd]) {
       res += run_query_pd(depth + 1, x.first, internal_norm);
     }
-    // we have no excess so far
     excess_pd[nd].clear();
-    //excess_pd_diag[nd].clear();
-
     if (subtree[nd].empty()) {
-      // if empty, we are just looking at leaves
       if (fabs(delta_node[nd]) > EPS) {
         if (unleaf_pd[nd].second){
-          //excess_pd_diag[nd].push_back(std::make_pair(delta_node[nd], unleaf_pd[nd].first));
           auto point = dictionary->row(unleaf_pd[nd].first);
           EigenVector proj;
           proj.resize(2);
@@ -511,7 +479,6 @@ it != p_save.rend(); ++it) {
 
       }
     } else {
-      // we're at a non leaf node
       bool diagonal_node = false;
       if (s_tree_d[nd]) {
         diagonal_node = true;
@@ -520,15 +487,11 @@ it != p_save.rend(); ++it) {
         if(x.second) {
           diagonal_node = true;
         }
-        // x has nothing to contribute, go
         if (excess_pd[x.first].empty()) {
           continue;
         }
 
-        // COLLECT all excess supply and demand
         for (auto y : excess_pd[x.first]) {
-          // if delta is negative, we are looking at demand
-
           if (sign(y.first)  == -1) {
             demand_reg.push_back(y);
           }
@@ -557,22 +520,19 @@ it != p_save.rend(); ++it) {
         if (fabs(u.first + v.first) < EPS) {
           demand_reg.pop_back();
           supply_reg.pop_back();
-          // scaling factor for distribution
           res += dist * fabs(u.first);
-        } else if (fabs(u.first) < fabs(v.first)) { // too much supply, taken up all demand
+        } else if (fabs(u.first) < fabs(v.first)) {
           demand_reg.pop_back();
-          supply_reg.back().first += u.first; // remember u is demand
+          supply_reg.back().first += u.first;
           res += dist * fabs(u.first);
         } else {
           supply_reg.pop_back();
-          demand_reg.back().first += v.first; // remember v is supply
+          demand_reg.back().first += v.first;
           res += dist * fabs(v.first);
         }
       }
 
       while(!demand_reg.empty() && diagonal_node) {
-        // match diagonal demand to proj on diag
-        // make projection of type eigen vec
         auto u = demand_reg.back();
         demand_reg.pop_back();
 
@@ -592,8 +552,6 @@ it != p_save.rend(); ++it) {
         res += dist *fabs(u.first);
       }
       while(!supply_reg.empty() && diagonal_node) {
-        // match diagonal demand to proj on diag
-        // make projection of type eigen vec
         auto u = supply_reg.back();
         supply_reg.pop_back();
         auto point = dictionary->row(u.second);
@@ -611,15 +569,12 @@ it != p_save.rend(); ++it) {
         }
         res += dist * fabs(u.first);
       }
-      // Pass up the remaining supply and demand here
       if (!supply_reg.empty()) {
         supply_reg.swap(excess_pd[nd]);
       }
       if (!demand_reg.empty()) {
         demand_reg.swap(excess_pd[nd]);
       }
-      // When we are done matching and the leftover supply or demand has
-      // been properly passed up to excess_pd[nd], clear supply and demand
       supply_reg.clear();
       demand_reg.clear();
     }
@@ -658,9 +613,9 @@ PYBIND11_MODULE(pd_estimators, m) {
   using pde::PDEstimators;
   py::class_<PDEstimators>(m, "PDEstimators")
       .def(py::init<>())
-      .def("load_vocabulary_pd", &PDEstimators::load_vocabulary_pd)
-      .def("load_candidates", &PDEstimators::load_candidates)
+      .def("load_vocabulary", &PDEstimators::load_vocabulary)
+      .def("load_diagrams", &PDEstimators::load_diagrams)
       .def("print_tree_details", &PDEstimators::print_tree_details)
       .def("quadtree_query_pair", &PDEstimators::quadtree_query_pair)
-      .def("flowtree_query_pd", &PDEstimators::flowtree_query_pd);
+      .def("flowtree_query", &PDEstimators::flowtree_query);
 }
