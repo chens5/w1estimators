@@ -44,16 +44,16 @@ class PDEstimators {
   PDEstimators() : stage(0) {}
 
 
-  void load_vocabulary(NumPyFloatArray points) {
+  void load_points(NumPyFloatArray points) {
     if (stage != 0) {
       throw std::logic_error(
-          "load_vocabulary() should be called once in the beginning");
+          "load_points() should be called once in the beginning");
     }
     stage = 1;
     py::buffer_info buf = points.request();
     if (buf.ndim != 2) {
       throw std::logic_error(
-          "load_vocabulary() expects a two-dimensional NumPy array");
+          "load_points() expects a two-dimensional NumPy array");
     }
     // number of points
     auto n = buf.shape[0];
@@ -151,7 +151,7 @@ public:
     }
   }
 
-  float quadtree_query_pair(const int32_t a,
+  float embedding_distance(const int32_t a,
   const int32_t b){
     auto query_embedding = dataset_embedding[a];
     auto point_embedding = dataset_embedding[b];
@@ -317,7 +317,7 @@ public:
 
   }
 
-  float flowtree_query(const std::vector<std::pair<int32_t, float>> &a,
+  float flowtree_distance(const std::vector<std::pair<int32_t, float>> &a,
                           const std::vector<std::pair<int32_t, float>> &b,
                           const int32_t internal_norm){
 
@@ -586,7 +586,7 @@ public:
   void check_stage() {
     if (stage != 2) {
       throw std::logic_error(
-          "need to call load_vocabulary() and load_dataset() first");
+          "need to call load_points() and load_dataset() first");
     }
   }
 
@@ -613,9 +613,9 @@ PYBIND11_MODULE(pd_estimators, m) {
   using pde::PDEstimators;
   py::class_<PDEstimators>(m, "PDEstimators")
       .def(py::init<>())
-      .def("load_vocabulary", &PDEstimators::load_vocabulary)
+      .def("load_points", &PDEstimators::load_points)
       .def("load_diagrams", &PDEstimators::load_diagrams)
       .def("print_tree_details", &PDEstimators::print_tree_details)
-      .def("quadtree_query_pair", &PDEstimators::quadtree_query_pair)
-      .def("flowtree_query", &PDEstimators::flowtree_query);
+      .def("embedding_distance", &PDEstimators::embedding_distance)
+      .def("flowtree_distance", &PDEstimators::flowtree_distance);
 }
