@@ -1,6 +1,6 @@
 # Fast approximations of 1-Wasserstein distance for persistence diagrams
 
-This repository contains two algorithms - modified L<sub>1</sub> embedding and modified flowtree - that approximate the 1-Wasserstein distance for persistence diagrams. The associated paper can be found [here](https://arxiv.org/abs/2104.07710)
+This repository contains two algorithms - modified L<sub>1</sub> embedding and modified flowtree - that approximate the 1-Wasserstein distance for persistence diagrams. The associated paper can be found [here](https://arxiv.org/abs/2104.07710).
 They are based on the Quadtree (Indyk, Thaper 2003) and Flowtree (Backurs, Dong, Indyk, Razenshteyn, Wagner, 2019) algorithms developed for standard optimal transport. 
 As such, much of the code in this repository is adapted from code provided alongside the Flowtree paper [here](https://github.com/ilyaraz/ot_estimators). 
 
